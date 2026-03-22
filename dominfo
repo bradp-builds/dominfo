@@ -1,0 +1,237 @@
+#!/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+print_header() {
+    echo ""
+    echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${BLUE}  $1${NC}"
+    echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
+}
+
+print_section() {
+    echo ""
+    echo -e "${BOLD}${CYAN}[ $1 ]${NC}"
+}
+
+get_registration_info() {
+    print_section "Registration Information"
+    
+    whois_output=$(whois "$domain" 2>/dev/null)
+    
+    if [ -z "$whois_output" ]; then
+        echo -e "${RED}No WHOIS data available${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Registrar:${NC} $(echo "$whois_output" | grep -i "Registrar:" | head -1 | awk -F: '{print $2}' | xargs)"
+    echo -e "${YELLOW}Registrar URL:${NC} $(echo "$whois_output" | grep -i "Registrar URL:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s", $i; print ""}' | xargs)"
+    convert_timestamp() {
+        local ts="$1"
+        if [[ "$ts" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?$ ]]; then
+            date -d "${ts/Z/}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$ts"
+        else
+            echo "$ts"
+        fi
+    }
+    
+    created=$(echo "$whois_output" | grep -i "Creation Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
+    expires=$(echo "$whois_output" | grep -i "Expiry Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
+    updated=$(echo "$whois_output" | grep -i "Updated Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
+    
+    echo -e "${YELLOW}Registered:${NC} $(convert_timestamp "$created")"
+    echo -e "${YELLOW}Expires:${NC} $(convert_timestamp "$expires")"
+    echo -e "${YELLOW}Updated:${NC} $(convert_timestamp "$updated")"
+    echo -e "${YELLOW}Status:${NC}"
+    echo "$whois_output" | grep -i "Domain Status:" | grep -v "(" | sed 's/^[^:]*: *//' | sort -f -u | while read -r status; do
+        echo -e "  ${GREEN}→${NC} $status"
+    done
+}
+
+get_name_servers() {
+    print_section "Name Servers"
+    
+    ns_output=$(dig +short NS "$domain" @8.8.8.8 2>/dev/null)
+    
+    if [ -z "$ns_output" ]; then
+        echo -e "${RED}No name servers found${NC}"
+    else
+        echo "$ns_output" | while read -r ns; do
+            echo -e "  ${GREEN}→${NC} $ns"
+        done
+    fi
+}
+
+get_a_records() {
+    print_section "A Records (IPv4)"
+    
+    a_output=$(dig +short A "$domain" @8.8.8.8 2>/dev/null)
+    
+    if [ -z "$a_output" ]; then
+        echo -e "${RED}No A records found${NC}"
+    else
+        echo "$a_output" | while read -r ip; do
+            echo -e "  ${GREEN}→${NC} $ip"
+        done
+    fi
+}
+
+get_aaaa_records() {
+    print_section "AAAA Records (IPv6)"
+    
+    aaaa_output=$(dig +short AAAA "$domain" @8.8.8.8 2>/dev/null)
+    
+    if [ -z "$aaaa_output" ]; then
+        echo -e "${RED}No AAAA records found${NC}"
+    else
+        echo "$aaaa_output" | while read -r ip; do
+            echo -e "  ${GREEN}→${NC} $ip"
+        done
+    fi
+}
+
+get_mx_records() {
+    print_section "MX Records (Mail)"
+    
+    mx_output=$(dig +short MX "$domain" @8.8.8.8 2>/dev/null)
+    
+    if [ -z "$mx_output" ]; then
+        echo -e "${RED}No MX records found${NC}"
+    else
+        echo "$mx_output" | sort -n | while read -r mx; do
+            priority=$(echo "$mx" | awk '{print $1}')
+            server=$(echo "$mx" | awk '{print $2}')
+            echo -e "  ${GREEN}→${NC} Priority $priority: $server"
+        done
+    fi
+}
+
+get_spf_record() {
+    print_section "SPF Record"
+    
+    spf_output=$(dig +short TXT "$domain" @8.8.8.8 2>/dev/null | grep -i "v=spf1")
+    
+    if [ -z "$spf_output" ]; then
+        echo -e "${RED}No SPF record found${NC}"
+    else
+        echo -e "${YELLOW}SPF Policy:${NC}"
+        echo "$spf_output" | while read -r spf; do
+            echo -e "  ${GREEN}$spf${NC}"
+        done
+    fi
+}
+
+get_dmarc_record() {
+    print_section "DMARC Record"
+    
+    dmarc_output=$(dig +short TXT "_dmarc.$domain" @8.8.8.8 2>/dev/null | grep -i "v=DMARC1")
+    
+    if [ -z "$dmarc_output" ]; then
+        echo -e "${RED}No DMARC record found${NC}"
+    else
+        echo -e "${YELLOW}DMARC Policy:${NC}"
+        echo "$dmarc_output" | while read -r dmarc; do
+            echo -e "  ${GREEN}$dmarc${NC}"
+        done
+    fi
+}
+
+show_help() {
+    echo "Usage: $0 [OPTIONS] DOMAIN"
+    echo ""
+    echo "Get comprehensive DNS and registration information for a domain."
+    echo ""
+    echo "Options:"
+    echo "  -h, --help      Show this help message"
+    echo "  -a              Show A records only"
+    echo "  -m              Show MX records only"
+    echo "  -n              Show name servers only"
+    echo "  -s              Show SPF record only"
+    echo "  -d              Show DMARC record only"
+    echo "  -r              Show registration info only"
+    echo ""
+    echo "Examples:"
+    echo "  $0 example.com"
+    echo "  $0 -m example.com"
+    echo "  $0 --help"
+}
+
+domain=""
+show_all=true
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -a)
+            show_all=false
+            show_a=true
+            ;;
+        -m)
+            show_all=false
+            show_mx=true
+            ;;
+        -n)
+            show_all=false
+            show_ns=true
+            ;;
+        -s)
+            show_all=false
+            show_spf=true
+            ;;
+        -d)
+            show_all=false
+            show_dmarc=true
+            ;;
+        -r)
+            show_all=false
+            show_reg=true
+            ;;
+        -*)
+            echo -e "${RED}Unknown option: $1${NC}"
+            show_help
+            exit 1
+            ;;
+        *)
+            domain="$1"
+            ;;
+    esac
+    shift
+done
+
+if [ -z "$domain" ]; then
+    echo -e "${RED}Error: Domain required${NC}"
+    show_help
+    exit 1
+fi
+
+domain=$(echo "$domain" | sed -e 's|^https\?://||' -e 's|^www\.||' -e 's|/$||' | awk -F/ '{print $1}')
+
+print_header "Domain Information: $domain"
+
+if [ "$show_all" = true ]; then
+    get_registration_info
+    get_name_servers
+    get_a_records
+    get_aaaa_records
+    get_mx_records
+    get_spf_record
+    get_dmarc_record
+else
+    [ "$show_reg" = true ] && get_registration_info
+    [ "$show_ns" = true ] && get_name_servers
+    [ "$show_a" = true ] && get_a_records
+    [ "$show_mx" = true ] && get_mx_records
+    [ "$show_spf" = true ] && get_spf_record
+    [ "$show_dmarc" = true ] && get_dmarc_record
+fi
+
+echo ""
