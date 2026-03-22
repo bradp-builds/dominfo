@@ -68,6 +68,27 @@ get_name_servers() {
     fi
 }
 
+lookup_asn() {
+    local ip="$1"
+    local asn_data
+    
+    if ! command -v mmdblookup &>/dev/null; then
+        return 1
+    fi
+    
+    asn_data=$(mmdblookup --file /var/lib/GeoIP/GeoLite2-ASN.mmdb --ip "$ip" 2>/dev/null)
+    if [ -z "$asn_data" ]; then
+        return 1
+    fi
+    
+    asn_number=$(echo "$asn_data" | grep "autonomous_system_number" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
+    asn_org=$(echo "$asn_data" | grep "autonomous_system_organization" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
+    
+    if [ -n "$asn_number" ] && [ -n "$asn_org" ]; then
+        echo "AS$asn_number ($asn_org)"
+    fi
+}
+
 get_a_records() {
     print_section "A Records (IPv4)"
     
@@ -77,7 +98,12 @@ get_a_records() {
         echo -e "${RED}No A records found${NC}"
     else
         echo "$a_output" | while read -r ip; do
-            echo -e "  ${GREEN}→${NC} $ip"
+            asn_info=$(lookup_asn "$ip")
+            if [ -n "$asn_info" ]; then
+                echo -e "  ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
+            else
+                echo -e "  ${GREEN}→${NC} $ip"
+            fi
         done
     fi
 }
@@ -91,7 +117,12 @@ get_aaaa_records() {
         echo -e "${RED}No AAAA records found${NC}"
     else
         echo "$aaaa_output" | while read -r ip; do
-            echo -e "  ${GREEN}→${NC} $ip"
+            asn_info=$(lookup_asn "$ip")
+            if [ -n "$asn_info" ]; then
+                echo -e "  ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
+            else
+                echo -e "  ${GREEN}→${NC} $ip"
+            fi
         done
     fi
 }

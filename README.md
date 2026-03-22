@@ -6,6 +6,7 @@ A bash script for retrieving comprehensive DNS and domain registration informati
 
 - **WHOIS Registration Info** - Registrar, registration dates, domain status
 - **DNS Records** - A, AAAA, MX, NS records
+- **ASN/Owner Info** - Autonomous System Number and organization for IPs
 - **Email Security** - SPF and DMARC records
 - **Colorized Output** - Easy-to-read formatted results
 
@@ -15,6 +16,9 @@ A bash script for retrieving comprehensive DNS and domain registration informati
 - `whois` - WHOIS queries
 - `dig` - DNS lookups
 - Standard GNU utilities: `grep`, `awk`, `sed`, `sort`, `date`
+- `libmaxminddb` (optional) - For ASN lookup on IPs
+  - Install: `sudo apt install libmaxmind-dev`
+  - Database: Download GeoLite2-ASN from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data and place at `/var/lib/GeoIP/GeoLite2-ASN.mmdb`
 
 ## Installation
 
@@ -57,7 +61,7 @@ Status:
   → ns2.example.com
 
 [ A Records (IPv4) ]
-  → 93.184.216.34
+  → 93.184.216.34 [AS15133 (Comcast Cable Communications)]
 
 [ MX Records (Mail) ]
   → Priority 0: mail.example.com

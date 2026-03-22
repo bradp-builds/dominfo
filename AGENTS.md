@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a bash script project (`dominfo`) that provides DNS and domain registration information lookup. It queries WHOIS data, DNS records (A, AAAA, MX, NS, SPF, DMARC) for a given domain.
+This is a bash script project (`dominfo`) that provides DNS and domain registration information lookup. It queries WHOIS data, DNS records (A, AAAA, MX, NS, SPF, DMARC) for a given domain, and optionally enriches IPs with ASN/owner information.
 
 ---
 
@@ -127,6 +127,8 @@ The script requires these system utilities:
 - `dig` - DNS lookups (Google DNS: 8.8.8.8)
 - `date` - Timestamp conversion
 - Standard GNU utilities: `grep`, `awk`, `sed`, `sort`
+- `mmdblookup` (optional) - ASN lookup for IPs (from libmaxminddb package)
+  - Database: `/var/lib/GeoIP/GeoLite2-ASN.mmdb`
 
 ---
 
