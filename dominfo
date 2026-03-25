@@ -9,279 +9,279 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 print_header() {
-    echo ""
-    echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${BLUE}  $1${NC}"
-    echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
+	echo ""
+	echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
+	echo -e "${BOLD}${BLUE}  $1${NC}"
+	echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
 }
 
 print_section() {
-    echo ""
-    echo -e "${BOLD}${CYAN}[ $1 ]${NC}"
+	echo ""
+	echo -e "${BOLD}${CYAN}[ $1 ]${NC}"
 }
 
 print_subsection() {
-    echo -e "  ${YELLOW}$1:${NC}"
+	echo -e "  ${YELLOW}$1:${NC}"
 }
 
 convert_timestamp() {
-    local ts="$1"
-    if [[ "$ts" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?$ ]]; then
-        date -d "${ts/Z/}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$ts"
-    else
-        echo "$ts"
-    fi
+	local ts="$1"
+	if [[ "$ts" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?$ ]]; then
+		date -d "${ts/Z/}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$ts"
+	else
+		echo "$ts"
+	fi
 }
 
 lookup_asn() {
-    local ip="$1"
-    local asn_data
-    
-    if ! command -v mmdblookup &>/dev/null; then
-        return 1
-    fi
-    
-    asn_data=$(mmdblookup --file /var/lib/GeoIP/GeoLite2-ASN.mmdb --ip "$ip" 2>/dev/null)
-    if [ -z "$asn_data" ]; then
-        return 1
-    fi
-    
-    asn_number=$(echo "$asn_data" | grep "autonomous_system_number" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
-    asn_org=$(echo "$asn_data" | grep "autonomous_system_organization" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
-    
-    if [ -n "$asn_number" ] && [ -n "$asn_org" ]; then
-        echo "AS$asn_number ($asn_org)"
-    fi
+	local ip="$1"
+	local asn_data
+
+	if ! command -v mmdblookup &>/dev/null; then
+		return 1
+	fi
+
+	asn_data=$(mmdblookup --file /var/lib/GeoIP/GeoLite2-ASN.mmdb --ip "$ip" 2>/dev/null)
+	if [ -z "$asn_data" ]; then
+		return 1
+	fi
+
+	asn_number=$(echo "$asn_data" | grep "autonomous_system_number" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
+	asn_org=$(echo "$asn_data" | grep "autonomous_system_organization" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
+
+	if [ -n "$asn_number" ] && [ -n "$asn_org" ]; then
+		echo "AS$asn_number ($asn_org)"
+	fi
 }
 
 get_registration_info() {
-    print_section "Registration"
-    
-    whois_output=$(whois "$domain" 2>/dev/null)
-    
-    if [ -z "$whois_output" ]; then
-        echo -e "${RED}No WHOIS data available${NC}"
-        return
-    fi
-    
-    echo -e "  ${YELLOW}Registrar:${NC} $(echo "$whois_output" | grep -i "Registrar:" | head -1 | awk -F: '{print $2}' | xargs)"
-    echo -e "  ${YELLOW}Registrar URL:${NC} $(echo "$whois_output" | grep -i "Registrar URL:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s", $i; print ""}' | xargs)"
-    
-    created=$(echo "$whois_output" | grep -i "Creation Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
-    expires=$(echo "$whois_output" | grep -i "Expiry Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
-    updated=$(echo "$whois_output" | grep -i "Updated Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
-    
-    echo -e "  ${YELLOW}Registered:${NC} $(convert_timestamp "$created")"
-    echo -e "  ${YELLOW}Expires:${NC} $(convert_timestamp "$expires")"
-    echo -e "  ${YELLOW}Updated:${NC} $(convert_timestamp "$updated")"
-    echo -e "  ${YELLOW}Status:${NC}"
-    echo "$whois_output" | grep -i "Domain Status:" | grep -v "(" | sed 's/^[^:]*: *//' | sort -f -u | while read -r status; do
-        echo -e "    ${GREEN}→${NC} $status"
-    done
+	print_section "Registration"
+
+	whois_output=$(whois "$domain" 2>/dev/null)
+
+	if [ -z "$whois_output" ]; then
+		echo -e "${RED}No WHOIS data available${NC}"
+		return
+	fi
+
+	echo -e "  ${YELLOW}Registrar:${NC} $(echo "$whois_output" | grep -i "Registrar:" | head -1 | awk -F: '{print $2}' | xargs)"
+	echo -e "  ${YELLOW}Registrar URL:${NC} $(echo "$whois_output" | grep -i "Registrar URL:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s", $i; print ""}' | xargs)"
+
+	created=$(echo "$whois_output" | grep -i "Creation Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
+	expires=$(echo "$whois_output" | grep -i "Expiry Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
+	updated=$(echo "$whois_output" | grep -i "Updated Date:" | head -1 | awk -F': ' '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
+
+	echo -e "  ${YELLOW}Registered:${NC} $(convert_timestamp "$created")"
+	echo -e "  ${YELLOW}Expires:${NC} $(convert_timestamp "$expires")"
+	echo -e "  ${YELLOW}Updated:${NC} $(convert_timestamp "$updated")"
+	echo -e "  ${YELLOW}Status:${NC}"
+	echo "$whois_output" | grep -i "Domain Status:" | grep -v "(" | sed 's/^[^:]*: *//' | sort -f -u | while read -r status; do
+		echo -e "    ${GREEN}→${NC} $status"
+	done
 }
 
 get_name_servers() {
-    print_subsection "Name Servers"
-    
-    ns_output=$(dig +short NS "$domain" @8.8.8.8 2>/dev/null)
-    
-    if [ -z "$ns_output" ]; then
-        echo -e "    ${RED}No name servers found${NC}"
-    else
-        echo "$ns_output" | while read -r ns; do
-            echo -e "    ${GREEN}→${NC} $ns"
-        done
-    fi
+	print_subsection "Name Servers"
+
+	ns_output=$(dig +short NS "$domain" @8.8.8.8 2>/dev/null)
+
+	if [ -z "$ns_output" ]; then
+		echo -e "    ${RED}No name servers found${NC}"
+	else
+		echo "$ns_output" | while read -r ns; do
+			echo -e "    ${GREEN}→${NC} $ns"
+		done
+	fi
 }
 
 get_ip_records() {
-    print_section "IP Addresses"
-    
-    a_output=$(dig +short A "$domain" @8.8.8.8 2>/dev/null)
-    aaaa_output=$(dig +short AAAA "$domain" @8.8.8.8 2>/dev/null)
-    
-    print_subsection "IPv4"
-    if [ -z "$a_output" ]; then
-        echo -e "    ${RED}No A records found${NC}"
-    else
-        echo "$a_output" | while read -r ip; do
-            asn_info=$(lookup_asn "$ip")
-            if [ -n "$asn_info" ]; then
-                echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
-            else
-                echo -e "    ${GREEN}→${NC} $ip"
-            fi
-        done
-    fi
-    
-    print_subsection "IPv6"
-    if [ -z "$aaaa_output" ]; then
-        echo -e "    ${RED}No AAAA records found${NC}"
-    else
-        echo "$aaaa_output" | while read -r ip; do
-            asn_info=$(lookup_asn "$ip")
-            if [ -n "$asn_info" ]; then
-                echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
-            else
-                echo -e "    ${GREEN}→${NC} $ip"
-            fi
-        done
-    fi
-    
-    print_subsection "www"
-    get_www_info
+	print_section "IP Addresses"
+
+	a_output=$(dig +short A "$domain" @8.8.8.8 2>/dev/null)
+	aaaa_output=$(dig +short AAAA "$domain" @8.8.8.8 2>/dev/null)
+
+	print_subsection "IPv4"
+	if [ -z "$a_output" ]; then
+		echo -e "    ${RED}No A records found${NC}"
+	else
+		echo "$a_output" | while read -r ip; do
+			asn_info=$(lookup_asn "$ip")
+			if [ -n "$asn_info" ]; then
+				echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
+			else
+				echo -e "    ${GREEN}→${NC} $ip"
+			fi
+		done
+	fi
+
+	print_subsection "IPv6"
+	if [ -z "$aaaa_output" ]; then
+		echo -e "    ${RED}No AAAA records found${NC}"
+	else
+		echo "$aaaa_output" | while read -r ip; do
+			asn_info=$(lookup_asn "$ip")
+			if [ -n "$asn_info" ]; then
+				echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
+			else
+				echo -e "    ${GREEN}→${NC} $ip"
+			fi
+		done
+	fi
+
+	print_subsection "www"
+	get_www_info
 }
 
 get_www_info() {
-    www_domain="www.$domain"
-    
-    cname_output=$(dig +short CNAME "$www_domain" @8.8.8.8 2>/dev/null)
-    www_a_output=$(dig +short A "$www_domain" @8.8.8.8 2>/dev/null)
-    www_aaaa_output=$(dig +short AAAA "$www_domain" @8.8.8.8 2>/dev/null)
-    
-    if [ -n "$cname_output" ]; then
-        echo -e "    ${GREEN}→${NC} CNAME: $cname_output"
-    elif [ -n "$www_a_output" ] || [ -n "$www_aaaa_output" ]; then
-        if [ -n "$www_a_output" ]; then
-            echo "$www_a_output" | while read -r ip; do
-                asn_info=$(lookup_asn "$ip")
-                if [ -n "$asn_info" ]; then
-                    echo -e "    ${GREEN}→${NC} IPv4: $ip ${CYAN}[$asn_info]${NC}"
-                else
-                    echo -e "    ${GREEN}→${NC} IPv4: $ip"
-                fi
-            done
-        fi
-        if [ -n "$www_aaaa_output" ]; then
-            echo "$www_aaaa_output" | while read -r ip; do
-                asn_info=$(lookup_asn "$ip")
-                if [ -n "$asn_info" ]; then
-                    echo -e "    ${GREEN}→${NC} IPv6: $ip ${CYAN}[$asn_info]${NC}"
-                else
-                    echo -e "    ${GREEN}→${NC} IPv6: $ip"
-                fi
-            done
-        fi
-    else
-        echo -e "    ${RED}No www records found${NC}"
-    fi
+	www_domain="www.$domain"
+
+	cname_output=$(dig +short CNAME "$www_domain" @8.8.8.8 2>/dev/null)
+	www_a_output=$(dig +short A "$www_domain" @8.8.8.8 2>/dev/null)
+	www_aaaa_output=$(dig +short AAAA "$www_domain" @8.8.8.8 2>/dev/null)
+
+	if [ -n "$cname_output" ]; then
+		echo -e "    ${GREEN}→${NC} CNAME: $cname_output"
+	elif [ -n "$www_a_output" ] || [ -n "$www_aaaa_output" ]; then
+		if [ -n "$www_a_output" ]; then
+			echo "$www_a_output" | while read -r ip; do
+				asn_info=$(lookup_asn "$ip")
+				if [ -n "$asn_info" ]; then
+					echo -e "    ${GREEN}→${NC} IPv4: $ip ${CYAN}[$asn_info]${NC}"
+				else
+					echo -e "    ${GREEN}→${NC} IPv4: $ip"
+				fi
+			done
+		fi
+		if [ -n "$www_aaaa_output" ]; then
+			echo "$www_aaaa_output" | while read -r ip; do
+				asn_info=$(lookup_asn "$ip")
+				if [ -n "$asn_info" ]; then
+					echo -e "    ${GREEN}→${NC} IPv6: $ip ${CYAN}[$asn_info]${NC}"
+				else
+					echo -e "    ${GREEN}→${NC} IPv6: $ip"
+				fi
+			done
+		fi
+	else
+		echo -e "    ${RED}No www records found${NC}"
+	fi
 }
 
 get_mx_records() {
-    print_section "Mail Settings"
-    
-    print_subsection "MX Records"
-    mx_output=$(dig +short MX "$domain" @8.8.8.8 2>/dev/null)
-    
-    if [ -z "$mx_output" ]; then
-        echo -e "    ${RED}No MX records found${NC}"
-    else
-        echo "$mx_output" | sort -n | while read -r mx; do
-            priority=$(echo "$mx" | awk '{print $1}')
-            server=$(echo "$mx" | awk '{print $2}')
-            echo -e "    ${GREEN}→${NC} Priority $priority: $server"
-        done
-    fi
-    
-    get_spf_record
-    get_dmarc_record
+	print_section "Mail Settings"
+
+	print_subsection "MX Records"
+	mx_output=$(dig +short MX "$domain" @8.8.8.8 2>/dev/null)
+
+	if [ -z "$mx_output" ]; then
+		echo -e "    ${RED}No MX records found${NC}"
+	else
+		echo "$mx_output" | sort -n | while read -r mx; do
+			priority=$(echo "$mx" | awk '{print $1}')
+			server=$(echo "$mx" | awk '{print $2}')
+			echo -e "    ${GREEN}→${NC} Priority $priority: $server"
+		done
+	fi
+
+	get_spf_record
+	get_dmarc_record
 }
 
 get_spf_record() {
-    print_subsection "SPF"
-    
-    spf_output=$(dig +short TXT "$domain" @8.8.8.8 2>/dev/null | grep -i "v=spf1")
-    
-    if [ -z "$spf_output" ]; then
-        echo -e "    ${RED}No SPF record found${NC}"
-    else
-        echo "$spf_output" | while read -r spf; do
-            echo -e "    ${GREEN}$spf${NC}"
-        done
-    fi
+	print_subsection "SPF"
+
+	spf_output=$(dig +short TXT "$domain" @8.8.8.8 2>/dev/null | grep -i "v=spf1")
+
+	if [ -z "$spf_output" ]; then
+		echo -e "    ${RED}No SPF record found${NC}"
+	else
+		echo "$spf_output" | while read -r spf; do
+			echo -e "    ${GREEN}$spf${NC}"
+		done
+	fi
 }
 
 get_dmarc_record() {
-    print_subsection "DMARC"
-    
-    dmarc_output=$(dig +short TXT "_dmarc.$domain" @8.8.8.8 2>/dev/null | grep -i "v=DMARC1")
-    
-    if [ -z "$dmarc_output" ]; then
-        echo -e "    ${RED}No DMARC record found${NC}"
-    else
-        echo "$dmarc_output" | while read -r dmarc; do
-            echo -e "    ${GREEN}$dmarc${NC}"
-        done
-    fi
+	print_subsection "DMARC"
+
+	dmarc_output=$(dig +short TXT "_dmarc.$domain" @8.8.8.8 2>/dev/null | grep -i "v=DMARC1")
+
+	if [ -z "$dmarc_output" ]; then
+		echo -e "    ${RED}No DMARC record found${NC}"
+	else
+		echo "$dmarc_output" | while read -r dmarc; do
+			echo -e "    ${GREEN}$dmarc${NC}"
+		done
+	fi
 }
 
 show_help() {
-    echo "Usage: $0 [OPTIONS] DOMAIN"
-    echo ""
-    echo "Get comprehensive DNS and registration information for a domain."
-    echo ""
-    echo "Options:"
-    echo "  -h, --help      Show this help message"
-    echo "  -a              Show IP addresses (A, AAAA, www)"
-    echo "  -m              Show mail settings (MX, SPF, DMARC)"
-    echo "  -r              Show registration info and name servers"
-    echo ""
-    echo "Examples:"
-    echo "  $0 example.com"
-    echo "  $0 -a example.com"
-    echo "  $0 -m example.com"
-    echo "  $0 --help"
+	echo "Usage: $0 [OPTIONS] DOMAIN"
+	echo ""
+	echo "Get comprehensive DNS and registration information for a domain."
+	echo ""
+	echo "Options:"
+	echo "  -h, --help      Show this help message"
+	echo "  -a              Show IP addresses (A, AAAA, www)"
+	echo "  -m              Show mail settings (MX, SPF, DMARC)"
+	echo "  -r              Show registration info and name servers"
+	echo ""
+	echo "Examples:"
+	echo "  $0 example.com"
+	echo "  $0 -a example.com"
+	echo "  $0 -m example.com"
+	echo "  $0 --help"
 }
 
 domain=""
 show_all=true
 
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        -a)
-            show_all=false
-            show_ips=true
-            ;;
-        -m)
-            show_all=false
-            show_mail=true
-            ;;
-        -r)
-            show_all=false
-            show_reg=true
-            ;;
-        -n)
-            show_all=false
-            show_reg=true
-            ;;
-        -s)
-            show_all=false
-            show_mail=true
-            ;;
-        -d)
-            show_all=false
-            show_mail=true
-            ;;
-        -*)
-            echo -e "${RED}Unknown option: $1${NC}"
-            show_help
-            exit 1
-            ;;
-        *)
-            domain="$1"
-            ;;
-    esac
-    shift
+	case $1 in
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	-a)
+		show_all=false
+		show_ips=true
+		;;
+	-m)
+		show_all=false
+		show_mail=true
+		;;
+	-r)
+		show_all=false
+		show_reg=true
+		;;
+	-n)
+		show_all=false
+		show_reg=true
+		;;
+	-s)
+		show_all=false
+		show_mail=true
+		;;
+	-d)
+		show_all=false
+		show_mail=true
+		;;
+	-*)
+		echo -e "${RED}Unknown option: $1${NC}"
+		show_help
+		exit 1
+		;;
+	*)
+		domain="$1"
+		;;
+	esac
+	shift
 done
 
 if [ -z "$domain" ]; then
-    echo -e "${RED}Error: Domain required${NC}"
-    show_help
-    exit 1
+	echo -e "${RED}Error: Domain required${NC}"
+	show_help
+	exit 1
 fi
 
 domain=$(echo "$domain" | sed -e 's|^https\?://||' -e 's|^www\.||' -e 's|/$||' | awk -F/ '{print $1}')
@@ -289,15 +289,15 @@ domain=$(echo "$domain" | sed -e 's|^https\?://||' -e 's|^www\.||' -e 's|/$||' |
 print_header "Domain Information: $domain"
 
 if [ "$show_all" = true ]; then
-    get_registration_info
-    get_name_servers
-    get_ip_records
-    get_mx_records
+	get_registration_info
+	get_name_servers
+	get_ip_records
+	get_mx_records
 else
-    [ "$show_reg" = true ] && get_registration_info
-    [ "$show_reg" = true ] && get_name_servers
-    [ "$show_ips" = true ] && get_ip_records
-    [ "$show_mail" = true ] && get_mx_records
+	[ "$show_reg" = true ] && get_registration_info
+	[ "$show_reg" = true ] && get_name_servers
+	[ "$show_ips" = true ] && get_ip_records
+	[ "$show_mail" = true ] && get_mx_records
 fi
 
 echo ""
