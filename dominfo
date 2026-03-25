@@ -285,6 +285,7 @@ if [ -z "$domain" ]; then
 fi
 
 domain=$(echo "$domain" | sed -e 's|^https\?://||' -e 's|^www\.||' -e 's|/$||' | awk -F/ '{print $1}')
+domain="${domain,,}"
 
 print_header "Domain Information: $domain"
 
