@@ -33,6 +33,52 @@ convert_timestamp() {
 	fi
 }
 
+find_best_authoritative_ns() {
+	local domain="$1"
+	local tld
+	local tld_ns
+	local ns_server
+	local soa_result
+
+	tld=$(echo "$domain" | awk -F. '{print $NF}')
+	if [ -z "$tld" ]; then
+		return 1
+	fi
+
+	tld_ns=$(dig +short NS "$tld" @8.8.8.8 2>/dev/null)
+	if [ -z "$tld_ns" ]; then
+		return 1
+	fi
+
+	for ns_server in $tld_ns; do
+		soa_result=$(dig +short SOA "$domain" @"$ns_server" +time=2 +tries=1 2>/dev/null)
+		if [ -n "$soa_result" ]; then
+			echo "$ns_server"
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+query_dns() {
+	local record_type="$1"
+	local domain="$2"
+	local result
+	local ns_server
+
+	if [ -n "$authoritative_ns" ]; then
+		result=$(dig +short "$record_type" "$domain" @"$authoritative_ns" +time=3 +tries=1 2>/dev/null)
+		if [ -n "$result" ]; then
+			echo "$result"
+			return 0
+		fi
+	fi
+
+	result=$(dig +short "$record_type" "$domain" @8.8.8.8 2>/dev/null)
+	echo "$result"
+}
+
 lookup_asn() {
 	local ip="$1"
 	local asn_data
@@ -83,7 +129,7 @@ get_registration_info() {
 get_name_servers() {
 	print_subsection "Name Servers"
 
-	ns_output=$(dig +short NS "$domain" @8.8.8.8 2>/dev/null)
+	ns_output=$(query_dns "NS" "$domain")
 
 	if [ -z "$ns_output" ]; then
 		echo -e "    ${RED}No name servers found${NC}"
@@ -97,8 +143,8 @@ get_name_servers() {
 get_ip_records() {
 	print_section "IP Addresses"
 
-	a_output=$(dig +short A "$domain" @8.8.8.8 2>/dev/null)
-	aaaa_output=$(dig +short AAAA "$domain" @8.8.8.8 2>/dev/null)
+	a_output=$(query_dns "A" "$domain")
+	aaaa_output=$(query_dns "AAAA" "$domain")
 
 	print_subsection "IPv4"
 	if [ -z "$a_output" ]; then
@@ -135,9 +181,9 @@ get_ip_records() {
 get_www_info() {
 	www_domain="www.$domain"
 
-	cname_output=$(dig +short CNAME "$www_domain" @8.8.8.8 2>/dev/null)
-	www_a_output=$(dig +short A "$www_domain" @8.8.8.8 2>/dev/null)
-	www_aaaa_output=$(dig +short AAAA "$www_domain" @8.8.8.8 2>/dev/null)
+	cname_output=$(query_dns "CNAME" "$www_domain")
+	www_a_output=$(query_dns "A" "$www_domain")
+	www_aaaa_output=$(query_dns "AAAA" "$www_domain")
 
 	if [ -n "$cname_output" ]; then
 		echo -e "    ${GREEN}→${NC} CNAME: $cname_output"
@@ -171,7 +217,7 @@ get_mx_records() {
 	print_section "Mail Settings"
 
 	print_subsection "MX Records"
-	mx_output=$(dig +short MX "$domain" @8.8.8.8 2>/dev/null)
+	mx_output=$(query_dns "MX" "$domain")
 
 	if [ -z "$mx_output" ]; then
 		echo -e "    ${RED}No MX records found${NC}"
@@ -190,7 +236,7 @@ get_mx_records() {
 get_spf_record() {
 	print_subsection "SPF"
 
-	spf_output=$(dig +short TXT "$domain" @8.8.8.8 2>/dev/null | grep -i "v=spf1")
+	spf_output=$(query_dns "TXT" "$domain" | grep -i "v=spf1")
 
 	if [ -z "$spf_output" ]; then
 		echo -e "    ${RED}No SPF record found${NC}"
@@ -204,7 +250,7 @@ get_spf_record() {
 get_dmarc_record() {
 	print_subsection "DMARC"
 
-	dmarc_output=$(dig +short TXT "_dmarc.$domain" @8.8.8.8 2>/dev/null | grep -i "v=DMARC1")
+	dmarc_output=$(query_dns "TXT" "_dmarc.$domain" | grep -i "v=DMARC1")
 
 	if [ -z "$dmarc_output" ]; then
 		echo -e "    ${RED}No DMARC record found${NC}"
@@ -288,6 +334,8 @@ domain=$(echo "$domain" | sed -e 's|^https\?://||' -e 's|^www\.||' -e 's|/$||' |
 domain="${domain,,}"
 
 print_header "Domain Information: $domain"
+
+authoritative_ns=$(find_best_authoritative_ns "$domain" 2>/dev/null)
 
 if [ "$show_all" = true ]; then
 	get_registration_info
