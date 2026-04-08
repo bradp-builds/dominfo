@@ -8,6 +8,8 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+declare -A asn_cache
+
 print_header() {
 	echo ""
 	echo -e "${BOLD}${BLUE}════════════════════════════════════════════════════════${NC}"
@@ -81,22 +83,26 @@ query_dns() {
 
 lookup_asn() {
 	local ip="$1"
-	local asn_data
 
-	if ! command -v mmdblookup &>/dev/null; then
-		return 1
+	if [[ -n "${asn_cache[$ip]}" ]]; then
+		echo "${asn_cache[$ip]} CACHED"
+		return
 	fi
 
-	asn_data=$(mmdblookup --file /var/lib/GeoIP/GeoLite2-ASN.mmdb --ip "$ip" 2>/dev/null)
-	if [ -z "$asn_data" ]; then
-		return 1
+	local response
+	response=$(curl -s "http://ip-api.com/json/$ip?fields=as,asname" 2>/dev/null)
+	if [ -z "$response" ]; then
+		return
 	fi
 
-	asn_number=$(echo "$asn_data" | grep "autonomous_system_number" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
-	asn_org=$(echo "$asn_data" | grep "autonomous_system_organization" -A1 | tail -1 | sed 's/<\w*>$//' | xargs)
+	local asn_info
+	asn_info=$(echo "$response" | grep -o '"as":"AS[0-9]*' | cut -d'"' -f4)
+	local asn_name
+	asn_name=$(echo "$response" | grep -o '"as":"[^"]*"' | cut -d'"' -f4 | sed 's/AS[0-9]* *//')
 
-	if [ -n "$asn_number" ] && [ -n "$asn_org" ]; then
-		echo "AS$asn_number ($asn_org)"
+	if [ -n "$asn_info" ] && [ -n "$asn_name" ]; then
+		asn_cache[$ip]="$asn_info ($asn_name)"
+		echo "${asn_cache[$ip]}"
 	fi
 }
 
