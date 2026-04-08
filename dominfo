@@ -9,6 +9,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 declare -A asn_cache
+asn_result=""
 
 print_header() {
 	echo ""
@@ -52,13 +53,13 @@ find_best_authoritative_ns() {
 		return 1
 	fi
 
-	for ns_server in $tld_ns; do
+	while read -r ns_server; do
 		soa_result=$(dig +short SOA "$domain" @"$ns_server" +time=2 +tries=1 2>/dev/null)
 		if [ -n "$soa_result" ]; then
 			echo "$ns_server"
 			return 0
 		fi
-	done
+	done <<< "$tld_ns"
 
 	return 1
 }
@@ -67,7 +68,6 @@ query_dns() {
 	local record_type="$1"
 	local domain="$2"
 	local result
-	local ns_server
 
 	if [ -n "$authoritative_ns" ]; then
 		result=$(dig +short "$record_type" "$domain" @"$authoritative_ns" +time=3 +tries=1 2>/dev/null)
@@ -85,24 +85,26 @@ lookup_asn() {
 	local ip="$1"
 
 	if [[ -n "${asn_cache[$ip]}" ]]; then
-		echo "${asn_cache[$ip]} CACHED"
+		asn_result="${asn_cache[$ip]}"
 		return
 	fi
 
 	local response
 	response=$(curl -s "http://ip-api.com/json/$ip?fields=as,asname" 2>/dev/null)
 	if [ -z "$response" ]; then
+		asn_result=""
 		return
 	fi
 
-	local asn_info
+	local asn_info asn_name
 	asn_info=$(echo "$response" | grep -o '"as":"AS[0-9]*' | cut -d'"' -f4)
-	local asn_name
 	asn_name=$(echo "$response" | grep -o '"as":"[^"]*"' | cut -d'"' -f4 | sed 's/AS[0-9]* *//')
 
 	if [ -n "$asn_info" ] && [ -n "$asn_name" ]; then
 		asn_cache[$ip]="$asn_info ($asn_name)"
-		echo "${asn_cache[$ip]}"
+		asn_result="${asn_cache[$ip]}"
+	else
+		asn_result=""
 	fi
 }
 
@@ -127,9 +129,12 @@ get_registration_info() {
 	echo -e "  ${YELLOW}Expires:${NC} $(convert_timestamp "$expires")"
 	echo -e "  ${YELLOW}Updated:${NC} $(convert_timestamp "$updated")"
 	echo -e "  ${YELLOW}Status:${NC}"
-	echo "$whois_output" | grep -i "Domain Status:" | grep -v "(" | sed 's/^[^:]*: *//' | sort -f -u | while read -r status; do
+
+	local statuses
+	statuses=$(echo "$whois_output" | grep -i "Domain Status:" | grep -v "(" | sed 's/^[^:]*: *//' | sort -f -u)
+	while read -r status; do
 		echo -e "    ${GREEN}→${NC} $status"
-	done
+	done <<< "$statuses"
 }
 
 get_name_servers() {
@@ -140,9 +145,9 @@ get_name_servers() {
 	if [ -z "$ns_output" ]; then
 		echo -e "    ${RED}No name servers found${NC}"
 	else
-		echo "$ns_output" | while read -r ns; do
+		while read -r ns; do
 			echo -e "    ${GREEN}→${NC} $ns"
-		done
+		done <<< "$ns_output"
 	fi
 }
 
@@ -156,28 +161,28 @@ get_ip_records() {
 	if [ -z "$a_output" ]; then
 		echo -e "    ${RED}No A records found${NC}"
 	else
-		echo "$a_output" | while read -r ip; do
-			asn_info=$(lookup_asn "$ip")
-			if [ -n "$asn_info" ]; then
-				echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
+		while read -r ip; do
+			lookup_asn "$ip"
+			if [ -n "$asn_result" ]; then
+				echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_result]${NC}"
 			else
 				echo -e "    ${GREEN}→${NC} $ip"
 			fi
-		done
+		done <<< "$a_output"
 	fi
 
 	print_subsection "IPv6"
 	if [ -z "$aaaa_output" ]; then
 		echo -e "    ${RED}No AAAA records found${NC}"
 	else
-		echo "$aaaa_output" | while read -r ip; do
-			asn_info=$(lookup_asn "$ip")
-			if [ -n "$asn_info" ]; then
-				echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_info]${NC}"
+		while read -r ip; do
+			lookup_asn "$ip"
+			if [ -n "$asn_result" ]; then
+				echo -e "    ${GREEN}→${NC} $ip ${CYAN}[$asn_result]${NC}"
 			else
 				echo -e "    ${GREEN}→${NC} $ip"
 			fi
-		done
+		done <<< "$aaaa_output"
 	fi
 
 	print_subsection "www"
@@ -195,24 +200,24 @@ get_www_info() {
 		echo -e "    ${GREEN}→${NC} CNAME: $cname_output"
 	elif [ -n "$www_a_output" ] || [ -n "$www_aaaa_output" ]; then
 		if [ -n "$www_a_output" ]; then
-			echo "$www_a_output" | while read -r ip; do
-				asn_info=$(lookup_asn "$ip")
-				if [ -n "$asn_info" ]; then
-					echo -e "    ${GREEN}→${NC} IPv4: $ip ${CYAN}[$asn_info]${NC}"
+			while read -r ip; do
+				lookup_asn "$ip"
+				if [ -n "$asn_result" ]; then
+					echo -e "    ${GREEN}→${NC} IPv4: $ip ${CYAN}[$asn_result]${NC}"
 				else
 					echo -e "    ${GREEN}→${NC} IPv4: $ip"
 				fi
-			done
+			done <<< "$www_a_output"
 		fi
 		if [ -n "$www_aaaa_output" ]; then
-			echo "$www_aaaa_output" | while read -r ip; do
-				asn_info=$(lookup_asn "$ip")
-				if [ -n "$asn_info" ]; then
-					echo -e "    ${GREEN}→${NC} IPv6: $ip ${CYAN}[$asn_info]${NC}"
+			while read -r ip; do
+				lookup_asn "$ip"
+				if [ -n "$asn_result" ]; then
+					echo -e "    ${GREEN}→${NC} IPv6: $ip ${CYAN}[$asn_result]${NC}"
 				else
 					echo -e "    ${GREEN}→${NC} IPv6: $ip"
 				fi
-			done
+			done <<< "$www_aaaa_output"
 		fi
 	else
 		echo -e "    ${RED}No www records found${NC}"
@@ -228,11 +233,13 @@ get_mx_records() {
 	if [ -z "$mx_output" ]; then
 		echo -e "    ${RED}No MX records found${NC}"
 	else
-		echo "$mx_output" | sort -n | while read -r mx; do
+		local mx_sorted
+		mx_sorted=$(echo "$mx_output" | sort -n)
+		while read -r mx; do
 			priority=$(echo "$mx" | awk '{print $1}')
 			server=$(echo "$mx" | awk '{print $2}')
 			echo -e "    ${GREEN}→${NC} Priority $priority: $server"
-		done
+		done <<< "$mx_sorted"
 	fi
 
 	get_spf_record
@@ -247,9 +254,9 @@ get_spf_record() {
 	if [ -z "$spf_output" ]; then
 		echo -e "    ${RED}No SPF record found${NC}"
 	else
-		echo "$spf_output" | while read -r spf; do
+		while read -r spf; do
 			echo -e "    ${GREEN}$spf${NC}"
-		done
+		done <<< "$spf_output"
 	fi
 }
 
@@ -261,9 +268,9 @@ get_dmarc_record() {
 	if [ -z "$dmarc_output" ]; then
 		echo -e "    ${RED}No DMARC record found${NC}"
 	else
-		echo "$dmarc_output" | while read -r dmarc; do
+		while read -r dmarc; do
 			echo -e "    ${GREEN}$dmarc${NC}"
-		done
+		done <<< "$dmarc_output"
 	fi
 }
 
