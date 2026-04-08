@@ -196,12 +196,22 @@ get_www_info() {
 	elif [ -n "$www_a_output" ] || [ -n "$www_aaaa_output" ]; then
 		if [ -n "$www_a_output" ]; then
 			echo "$www_a_output" | while read -r ip; do
-				echo -e "    ${GREEN}→${NC} IPv4: $ip"
+				asn_info=$(lookup_asn "$ip")
+				if [ -n "$asn_info" ]; then
+					echo -e "    ${GREEN}→${NC} IPv4: $ip ${CYAN}[$asn_info]${NC}"
+				else
+					echo -e "    ${GREEN}→${NC} IPv4: $ip"
+				fi
 			done
 		fi
 		if [ -n "$www_aaaa_output" ]; then
 			echo "$www_aaaa_output" | while read -r ip; do
-				echo -e "    ${GREEN}→${NC} IPv6: $ip"
+				asn_info=$(lookup_asn "$ip")
+				if [ -n "$asn_info" ]; then
+					echo -e "    ${GREEN}→${NC} IPv6: $ip ${CYAN}[$asn_info]${NC}"
+				else
+					echo -e "    ${GREEN}→${NC} IPv6: $ip"
+				fi
 			done
 		fi
 	else
